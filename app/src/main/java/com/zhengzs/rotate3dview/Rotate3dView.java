@@ -4,7 +4,6 @@ import android.content.Context;
 import android.graphics.Camera;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
-import android.print.PrinterId;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
@@ -93,14 +92,45 @@ public class Rotate3dView extends ViewGroup {
     }
 
 
-/*    @Override
+    @Override
     protected void dispatchDraw(Canvas canvas) {
-        for (int i = 0; i < getChildCount(); i++) {
-            drawPage(canvas, i, getDrawingTime());
+        for (int i = 0; i < 4; i++) {
+            if (mCurrentScrollDir == HORIZONTAL_SCROLL) {
+                drawPageHrizontal(canvas, i, getDrawingTime());
+            } else if (mCurrentScrollDir == VERTICAL_SCROLL) {
+                drawPageVertical(canvas, i, getDrawingTime());
+            } else {
+                drawChild(canvas, getChildAt(i), getDrawingTime());
+            }
         }
-    }*/
+    }
 
-    private void drawPage(Canvas canvas, int index, long drawTime) {
+    private void drawPageHrizontal(Canvas canvas, int index, long drawTime) {
+        int left = index * mWidth;
+        int right = (index + 1) * mWidth;
+        int scrollX = Math.abs(getScrollX());
+        if (scrollX - left > mWidth || scrollX + mWidth < left) {
+            return;
+        }
+
+        mCamera.save();
+        canvas.save();
+        mMatrix.reset();
+
+        int degree = 90 * (getScrollX() - index * mWidth) / mWidth;
+        int centerX = getScrollX() > index * mWidth ? (index + 1) * mWidth : index * mWidth;
+        int centerY = mHeight / 2;
+        mCamera.rotateY(-degree);
+        mCamera.getMatrix(mMatrix);
+        mMatrix.preTranslate(-centerX, -centerY);
+        mMatrix.postTranslate(centerX, centerY);
+        canvas.concat(mMatrix);
+        drawChild(canvas, getChildAt(index), drawTime);
+        canvas.restore();
+        mCamera.restore();
+    }
+
+    private void drawPageVertical(Canvas canvas, int index, long drawTime) {
         int top = index * mHeight;
         int bottom = (index + 1) * mHeight;
         int scrollY = getScrollY();
@@ -145,11 +175,14 @@ public class Rotate3dView extends ViewGroup {
                     mScroller.setFinalY(mScroller.getCurrY());
                     mScroller.abortAnimation();
                     scrollTo(getScrollX(), getScrollY());
+                } else {
+                    mCurrentScrollDir = NONE_SCROLL;
                 }
                 break;
             case MotionEvent.ACTION_MOVE:
                 float deltaX = mDownX - event.getX();
                 float deltaY = mDownY - event.getY();
+                scrollBy((int) deltaX, 0);
                 if (deltaX == 0 && deltaY == 0) {
                     break;
                 }
@@ -165,7 +198,7 @@ public class Rotate3dView extends ViewGroup {
                 } else {
                     //vertical scroll.
                     if (mCurrentScrollDir == NONE_SCROLL || mCurrentScrollDir == VERTICAL_SCROLL) {
-                       recycleViewVertical();
+                        recycleViewVertical();
                         mCurrentScrollDir = VERTICAL_SCROLL;
                         requestLayout();
                         setScrollX(0);
@@ -178,27 +211,28 @@ public class Rotate3dView extends ViewGroup {
             case MotionEvent.ACTION_UP:
                 int scrollDelta;
                 int scrollValue;
-                if(mCurrentScrollDir==VERTICAL_SCROLL){
+                if (mCurrentScrollDir == VERTICAL_SCROLL) {
                     scrollDelta = Math.abs(getScrollY()) % mHeight;
-                    scrollValue = scrollDelta > mHeight / 2 ? mHeight - scrollDelta : -scrollDelta;
-                    movePageVertical(scrollValue);
-                }else if(mCurrentScrollDir ==HORIZONTAL_SCROLL){
+                    if (mVelocityTracker.getYVelocity() > 300) {
+                        movePageVertical(-scrollDelta);
+                    } else if (mVelocityTracker.getYVelocity() < -300) {
+                        movePageVertical(mHeight - scrollDelta);
+                    } else {
+                        scrollValue = scrollDelta > mHeight / 2 ? mHeight - scrollDelta : -scrollDelta;
+                        movePageVertical(scrollValue);
+                    }
+
+                } else if (mCurrentScrollDir == HORIZONTAL_SCROLL) {
                     scrollDelta = Math.abs(getScrollX()) % mWidth;
-                    scrollValue = scrollDelta > mWidth / 2 ? mWidth - scrollDelta : -scrollDelta;
-                    movePageHorizontal(scrollValue);
+                    if (mVelocityTracker.getXVelocity() > 300) {
+                        movePageHorizontal(-scrollDelta);
+                    } else if (mVelocityTracker.getXVelocity() < -300) {
+                        movePageHorizontal(mHeight - scrollDelta);
+                    } else {
+                        scrollValue = scrollDelta > mWidth / 2 ? mWidth - scrollDelta : -scrollDelta;
+                        movePageHorizontal(scrollValue);
+                    }
                 }
-
-               /* int scrollDelta = Math.abs(getScrollY()) % mHeight;
-                if (mVelocityTracker.getYVelocity() > 300) {
-                    movePage(-scrollDelta);
-                } else if (mVelocityTracker.getYVelocity() < -300) {
-                    movePage(mHeight - scrollDelta);
-                } else {
-                    int scrollValue = scrollDelta > mHeight / 2 ? mHeight - scrollDelta : -scrollDelta;
-                    movePage(scrollValue);
-                }*/
-
-                mCurrentScrollDir = NONE_SCROLL;
                 break;
         }
         return true;
